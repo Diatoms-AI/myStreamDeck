@@ -16,7 +16,7 @@ let recordingButton = null;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function runPowerShell(script) {
-    const ps = spawn('powershell', ['-ExecutionPolicy', 'Bypass', '-File', script]);
+    const ps = spawn('pwsh', ['-ExecutionPolicy', 'Bypass', '-File', script]);
     ps.stdout.on('data', d => console.log('[ps]', d.toString().trim()));
     ps.stderr.on('data', d => console.error('[ps]', d.toString().trim()));
     ps.on('close', code => console.log(`[ps] exit ${code}`));

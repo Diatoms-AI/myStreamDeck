@@ -40,11 +40,12 @@ The tray app (`server/tray.pyw`) runs this automatically on every server start.
 ### Windows Server
 | File | Purpose |
 |------|---------|
-| `server/server.js` | Node.js HTTP server, dynamic routing for all 15 buttons |
+| `server/server.js` | Node.js HTTP server, dynamic routing for all 15 buttons — spawns `pwsh` (PS7) for PS1 scripts |
 | `server/tray.pyw` | Python system tray app (green/red dot), auto-starts server + ADB reverse |
 | `server/recorder.py` | pynput listener — records mouse clicks + keystrokes to JSON |
 | `server/player.py` | pyautogui — replays a recorded macro JSON |
-| `server/actions/button1.ps1` | Opens YouTube_Reference_Tool + YouTube Transcripts on Display 2 |
+| `server/switch_desktop.py` | pyautogui helper — switches virtual desktop by exact delta (right/left N presses) |
+| `server/actions/button1.ps1` | Switches to "YouTube" virtual desktop by name, then opens YouTube_Reference_Tool + YouTube Transcripts side-by-side on 4K display |
 | `server/macros/button<id>.json` | Saved recorded macros (created at runtime) |
 | `server/Start Tray.bat` | Double-click launcher (uses %LOCALAPPDATA%\Microsoft\WindowsApps\pythonw.exe) |
 | `server/Start Tray.vbs` | Silent VBScript launcher alternative |
@@ -105,6 +106,7 @@ Button 1 opens VS Code side-by-side on the 4K display:
 | Tray app | Python 3.13 + pystray + Pillow |
 | Macro record | Python pynput |
 | Macro replay | Python pyautogui |
+| Virtual desktop switching | PowerShell VirtualDesktop module (PS7) + pyautogui |
 
 ## Python Environment
 Microsoft Store Python — `pythonw.exe` is at:
@@ -113,9 +115,18 @@ Microsoft Store Python — `pythonw.exe` is at:
 
 Installed packages: `pystray`, `Pillow`, `pynput`, `pyautogui`
 
+## Virtual Desktop Switching (button1.ps1)
+button1.ps1 uses the `VirtualDesktop` PS7 module to find the "YouTube" desktop by label, computes
+the exact delta from the current desktop, then calls `switch_desktop.py` which sends `Win+Ctrl+Right/Left`
+N times via pyautogui. VS Code opens after the switch so windows land on the correct desktop.
+
+**Dependency:** `Install-Module VirtualDesktop -Scope CurrentUser` (already installed, PS7 only)
+
+**Note:** server.js must use `pwsh` (not `powershell`) so PS7 modules are available.
+
 ## Known Issues / Next Steps
 - [ ] Button state (red/green) resets on every app launch — no persistence yet
 - [ ] No Windows startup shortcut created yet (copy Start Tray.bat to shell:startup)
-- [ ] YouTube Virtual Desktop auto-switching not implemented (switch manually before pressing button)
+- [x] YouTube Virtual Desktop auto-switching — resolves "YouTube" desktop by label, survives reorder
 - [ ] Only button 1 has a configured action (PS1 script) — buttons 2–15 need macros recorded
 - [ ] Macro recorder captures ALL PC input including unintended keystrokes during recording pauses
