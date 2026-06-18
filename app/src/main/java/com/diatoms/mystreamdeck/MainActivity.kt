@@ -24,10 +24,16 @@ class MainActivity : ComponentActivity() {
             MyStreamDeckTheme {
                 var screen by remember { mutableStateOf<Screen>(Screen.Deck) }
                 var buttons by remember { mutableStateOf(defaultButtons) }
+                // IDs of buttons whose last HTTP call succeeded — drives green border
+                var activeIds by remember { mutableStateOf(emptySet<Int>()) }
 
                 when (screen) {
                     Screen.Deck -> MainScreen(
                         buttons = buttons,
+                        activeIds = activeIds,
+                        onCallResult = { id, success ->
+                            activeIds = if (success) activeIds + id else activeIds - id
+                        },
                         onSettingsClick = { screen = Screen.Config }
                     )
                     Screen.Config -> MacroConfigScreen(

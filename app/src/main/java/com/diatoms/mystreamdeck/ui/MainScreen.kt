@@ -10,11 +10,6 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.net.HttpURLConnection
-import java.net.URL
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -27,6 +22,10 @@ import androidx.compose.ui.unit.sp
 import com.diatoms.mystreamdeck.model.MacroButton
 import com.diatoms.mystreamdeck.model.defaultButtons
 import com.diatoms.mystreamdeck.ui.theme.MyStreamDeckTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.net.HttpURLConnection
+import java.net.URL
 
 private val BgDark      = Color(0xFF0D1117)
 private val PanelDark   = Color(0xFF161B22)
@@ -37,6 +36,8 @@ private val BorderGreen = Color(0xFF2ECC71)
 @Composable
 fun MainScreen(
     buttons: List<MacroButton>,
+    activeIds: Set<Int>,
+    onCallResult: (id: Int, success: Boolean) -> Unit,
     onSettingsClick: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
@@ -52,7 +53,7 @@ fun MainScreen(
                 .padding(padding)
                 .background(BgDark)
         ) {
-            // 3×5 grid — weight-based so all 15 buttons always fill the screen
+            // 3×5 grid
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -69,31 +70,35 @@ fun MainScreen(
                     ) {
                         for (col in 0..4) {
                             val btn = buttons[row * 5 + col]
-                                MacroButtonCard(
+                            MacroButtonCard(
                                 button = btn,
-                                active = btn.apiUrl.isNotBlank(),
+                                active = btn.id in activeIds,
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight(),
                                 onClick = {
-                                    val b = btn
-                                    if (b.apiUrl.isNotBlank()) {
-                                        scope.launch(Dispatchers.IO) {
-                                            val msg = try {
-                                                val conn = URL(b.apiUrl).openConnection() as HttpURLConnection
-                                                conn.requestMethod = "POST"
-                                                conn.connectTimeout = 3000
-                                                conn.readTimeout = 3000
-                                                val code = conn.responseCode
-                                                conn.disconnect()
-                                                if (code in 200..299) "✓ ${b.label}" else "Error $code"
-                                            } catch (e: Exception) {
-                                                "No connection to server"
-                                            }
-                                            snackbarHostState.showSnackbar(msg)
+                                    if (btn.apiUrl.isBlank()) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("${btn.label} — no action set")
                                         }
-                                    } else {
-                                        scope.launch { snackbarHostState.showSnackbar("${b.label} — no action set") }
+                                        return@MacroButtonCard
+                                    }
+                                    scope.launch(Dispatchers.IO) {
+                                        val success = try {
+                                            val conn = URL(btn.apiUrl).openConnection() as HttpURLConnection
+                                            conn.requestMethod = "POST"
+                                            conn.connectTimeout = 3000
+                                            conn.readTimeout = 3000
+                                            val code = conn.responseCode
+                                            conn.disconnect()
+                                            code in 200..299
+                                        } catch (e: Exception) {
+                                            false
+                                        }
+                                        onCallResult(btn.id, success)
+                                        snackbarHostState.showSnackbar(
+                                            if (success) "✓ ${btn.label}" else "No connection to server"
+                                        )
                                     }
                                 }
                             )
@@ -102,7 +107,7 @@ fun MainScreen(
                 }
             }
 
-            // Side panel — settings gear only
+            // Side panel
             Column(
                 modifier = Modifier
                     .width(64.dp)
@@ -176,6 +181,11 @@ private fun MacroButtonCard(
 @Composable
 private fun MainScreenPreview() {
     MyStreamDeckTheme {
-        MainScreen(buttons = defaultButtons, onSettingsClick = {})
+        MainScreen(
+            buttons = defaultButtons,
+            activeIds = emptySet(),
+            onCallResult = { _, _ -> },
+            onSettingsClick = {}
+        )
     }
 }
