@@ -10,6 +10,11 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.net.HttpURLConnection
+import java.net.URL
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -33,14 +38,7 @@ fun MainScreen(
     onSettingsClick: () -> Unit,
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
-    var snackbarMessage by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(snackbarMessage) {
-        snackbarMessage?.let {
-            snackbarHostState.showSnackbar(it)
-            snackbarMessage = null
-        }
-    }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -75,10 +73,24 @@ fun MainScreen(
                                     .fillMaxHeight(),
                                 onClick = {
                                     val b = buttons[row * 5 + col]
-                                    snackbarMessage = if (b.apiUrl.isNotBlank())
-                                        "Calling: ${b.apiUrl}"
-                                    else
-                                        "${b.label} — no action set"
+                                    if (b.apiUrl.isNotBlank()) {
+                                        scope.launch(Dispatchers.IO) {
+                                            val msg = try {
+                                                val conn = URL(b.apiUrl).openConnection() as HttpURLConnection
+                                                conn.requestMethod = "POST"
+                                                conn.connectTimeout = 3000
+                                                conn.readTimeout = 3000
+                                                val code = conn.responseCode
+                                                conn.disconnect()
+                                                if (code in 200..299) "✓ ${b.label}" else "Error $code"
+                                            } catch (e: Exception) {
+                                                "No connection to server"
+                                            }
+                                            snackbarHostState.showSnackbar(msg)
+                                        }
+                                    } else {
+                                        scope.launch { snackbarHostState.showSnackbar("${b.label} — no action set") }
+                                    }
                                 }
                             )
                         }
