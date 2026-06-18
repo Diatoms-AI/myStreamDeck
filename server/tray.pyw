@@ -142,7 +142,7 @@ def _setup(icon):
 
 menu = pystray.Menu(
     pystray.MenuItem(
-        lambda text, item: "Stop Server" if _is_running() else "Start Server",
+        lambda item: "Stop Server" if _is_running() else "Start Server",
         _toggle,
         default=True,
     ),

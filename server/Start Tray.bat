@@ -1,2 +1,2 @@
 @echo off
-start "" pythonw "%~dp0tray.pyw"
+start "" "%LOCALAPPDATA%\Microsoft\WindowsApps\pythonw.exe" "%~dp0tray.pyw"
