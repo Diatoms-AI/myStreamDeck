@@ -9,6 +9,7 @@ from PIL import Image, ImageDraw
 
 PORT = 8765
 NODE_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "server.js")
+ADB = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Android", "Sdk", "platform-tools", "adb.exe")
 
 _proc = None
 _lock = threading.Lock()
@@ -75,7 +76,19 @@ def _start(icon, item=None):
             stderr=subprocess.DEVNULL,
         )
     time.sleep(0.5)
+    _adb_reverse()
     _refresh(icon)
+
+
+def _adb_reverse():
+    """Forward phone localhost:8765 → PC port 8765 over USB."""
+    if os.path.exists(ADB):
+        subprocess.Popen(
+            [ADB, "reverse", f"tcp:{PORT}", f"tcp:{PORT}"],
+            creationflags=subprocess.CREATE_NO_WINDOW,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 def _stop(icon, item=None):

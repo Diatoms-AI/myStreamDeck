@@ -14,7 +14,7 @@ val defaultButtons: List<MacroButton> = (1..15).map { i ->
         label = "YT Workspace",
         subLabel = "Open on Display 2",
         colorHex = 0xFF1A4A7A,
-        apiUrl = "http://10.158.12.5:8765/button/1"
+        apiUrl = "http://localhost:8765/button/1"
     )
     else MacroButton(id = i, label = "#$i")
 }
