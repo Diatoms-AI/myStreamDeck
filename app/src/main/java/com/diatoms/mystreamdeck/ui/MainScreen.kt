@@ -28,9 +28,11 @@ import com.diatoms.mystreamdeck.model.MacroButton
 import com.diatoms.mystreamdeck.model.defaultButtons
 import com.diatoms.mystreamdeck.ui.theme.MyStreamDeckTheme
 
-private val BgDark = Color(0xFF0D1117)
-private val PanelDark = Color(0xFF161B22)
-private val BorderColor = Color(0xFF30363D)
+private val BgDark      = Color(0xFF0D1117)
+private val PanelDark   = Color(0xFF161B22)
+private val BorderDim   = Color(0xFF30363D)
+private val BorderRed   = Color(0xFFE74C3C)
+private val BorderGreen = Color(0xFF2ECC71)
 
 @Composable
 fun MainScreen(
@@ -66,13 +68,15 @@ fun MainScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         for (col in 0..4) {
-                            MacroButtonCard(
-                                button = buttons[row * 5 + col],
+                            val btn = buttons[row * 5 + col]
+                                MacroButtonCard(
+                                button = btn,
+                                active = btn.apiUrl.isNotBlank(),
                                 modifier = Modifier
                                     .weight(1f)
                                     .fillMaxHeight(),
                                 onClick = {
-                                    val b = buttons[row * 5 + col]
+                                    val b = btn
                                     if (b.apiUrl.isNotBlank()) {
                                         scope.launch(Dispatchers.IO) {
                                             val msg = try {
@@ -104,7 +108,7 @@ fun MainScreen(
                     .width(64.dp)
                     .fillMaxHeight()
                     .background(PanelDark)
-                    .border(width = 1.dp, color = BorderColor),
+                    .border(width = 1.dp, color = BorderDim),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Bottom,
             ) {
@@ -127,14 +131,16 @@ fun MainScreen(
 @Composable
 private fun MacroButtonCard(
     button: MacroButton,
+    active: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val borderColor = if (active) BorderGreen else BorderRed
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(10.dp))
             .background(Color(button.colorHex))
-            .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
+            .border(2.dp, borderColor, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
