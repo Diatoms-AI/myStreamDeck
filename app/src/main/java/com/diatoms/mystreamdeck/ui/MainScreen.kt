@@ -4,9 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
@@ -31,10 +28,12 @@ private val PanelDark = Color(0xFF161B22)
 private val BorderColor = Color(0xFF30363D)
 
 @Composable
-fun MainScreen() {
-    var buttons by remember { mutableStateOf(defaultButtons) }
-    var snackbarMessage by remember { mutableStateOf<String?>(null) }
+fun MainScreen(
+    buttons: List<MacroButton>,
+    onSettingsClick: () -> Unit,
+) {
     val snackbarHostState = remember { SnackbarHostState() }
+    var snackbarMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(snackbarMessage) {
         snackbarMessage?.let {
@@ -53,61 +52,57 @@ fun MainScreen() {
                 .padding(padding)
                 .background(BgDark)
         ) {
-            // 3×5 macro button grid
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(5),
+            // 3×5 grid — weight-based so all 15 buttons always fill the screen
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(buttons, key = { it.id }) { button ->
-                    MacroButtonCard(
-                        button = button,
-                        onClick = { snackbarMessage = "Button ${button.id}: ${button.label} tapped" }
-                    )
+                for (row in 0..2) {
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        for (col in 0..4) {
+                            MacroButtonCard(
+                                button = buttons[row * 5 + col],
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight(),
+                                onClick = {
+                                    val b = buttons[row * 5 + col]
+                                    snackbarMessage = if (b.apiUrl.isNotBlank())
+                                        "Calling: ${b.apiUrl}"
+                                    else
+                                        "${b.label} — no action set"
+                                }
+                            )
+                        }
+                    }
                 }
             }
 
-            // Side panel
+            // Side panel — settings gear only
             Column(
                 modifier = Modifier
-                    .width(72.dp)
+                    .width(64.dp)
                     .fillMaxHeight()
                     .background(PanelDark)
                     .border(width = 1.dp, color = BorderColor),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.Bottom,
             ) {
-                // Camera placeholder
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(8.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.Black)
-                        .border(1.dp, BorderColor, RoundedCornerShape(8.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "CAM",
-                        color = Color(0xFF444D56),
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                // Settings gear
                 IconButton(
-                    onClick = { snackbarMessage = "Settings coming soon" },
+                    onClick = onSettingsClick,
                     modifier = Modifier.padding(bottom = 8.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings",
+                        contentDescription = "Configure macros",
                         tint = Color(0xFF8B949E),
                         modifier = Modifier.size(28.dp)
                     )
@@ -118,14 +113,15 @@ fun MainScreen() {
 }
 
 @Composable
-private fun MacroButtonCard(button: MacroButton, onClick: () -> Unit) {
-    val bgColor = Color(button.colorHex)
-
+private fun MacroButtonCard(
+    button: MacroButton,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     Box(
-        modifier = Modifier
-            .aspectRatio(1f)
+        modifier = modifier
             .clip(RoundedCornerShape(10.dp))
-            .background(bgColor)
+            .background(Color(button.colorHex))
             .border(1.dp, BorderColor, RoundedCornerShape(10.dp))
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
@@ -158,8 +154,10 @@ private fun MacroButtonCard(button: MacroButton, onClick: () -> Unit) {
     }
 }
 
-@Preview(showBackground = true, widthDp = 800, heightDp = 480)
+@Preview(showBackground = true, widthDp = 800, heightDp = 400)
 @Composable
 private fun MainScreenPreview() {
-    MyStreamDeckTheme { MainScreen() }
+    MyStreamDeckTheme {
+        MainScreen(buttons = defaultButtons, onSettingsClick = {})
+    }
 }
