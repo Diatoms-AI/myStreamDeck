@@ -1,8 +1,11 @@
+# -*- coding: utf-8 -*-
+import json
 import os
 import socket
 import subprocess
 import threading
 import time
+import urllib.request
 
 import pystray
 from PIL import Image, ImageDraw
@@ -13,19 +16,18 @@ ADB = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Android", "Sdk", "platfo
 
 _proc = None
 _lock = threading.Lock()
+_recording_button = None  # int button id while recording, else None
 
 
-# ── Icon drawing ────────────────────────────────────────────────────────────
+# ── Icon drawing ─────────────────────────────────────────────────────────────
 
 def _make_icon(running: bool) -> Image.Image:
     sz = 64
     img = Image.new("RGBA", (sz, sz), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
 
-    # Dark background tile
     d.rounded_rectangle([0, 0, sz - 1, sz - 1], radius=10, fill=(13, 17, 23))
 
-    # 3×2 grid of small Stream Deck "buttons"
     cols, rows, pad, gap = 3, 2, 9, 5
     bw = (sz - 2 * pad - (cols - 1) * gap) // cols
     bh = (sz - 2 * pad - (rows - 1) * gap) // rows
@@ -35,12 +37,10 @@ def _make_icon(running: bool) -> Image.Image:
             y = pad + r * (bh + gap)
             d.rounded_rectangle([x, y, x + bw, y + bh], radius=2, fill=(42, 58, 78))
 
-    # Status dot — bottom-right corner
     dot = 14
     ox, oy = sz - dot - 2, sz - dot - 2
-    color = (46, 204, 113) if running else (231, 76, 60)   # green / red
+    color = (46, 204, 113) if running else (231, 76, 60)
     d.ellipse([ox, oy, ox + dot, oy + dot], fill=color)
-    # White centre of dot
     inner = 5
     cx, cy = ox + dot // 2, oy + dot // 2
     d.ellipse([cx - inner, cy - inner, cx + inner, cy + inner], fill=(255, 255, 255, 180))
@@ -48,7 +48,7 @@ def _make_icon(running: bool) -> Image.Image:
     return img
 
 
-# ── Server control ──────────────────────────────────────────────────────────
+# ── Server control ────────────────────────────────────────────────────────────
 
 def _port_in_use() -> bool:
     with socket.socket() as s:
@@ -81,7 +81,6 @@ def _start(icon, item=None):
 
 
 def _adb_reverse():
-    """Forward phone localhost:8765 → PC port 8765 over USB."""
     if os.path.exists(ADB):
         subprocess.Popen(
             [ADB, "reverse", f"tcp:{PORT}", f"tcp:{PORT}"],
@@ -97,7 +96,6 @@ def _stop(icon, item=None):
         if _proc:
             _proc.terminate()
             _proc = None
-    # Also kill any external process holding the port
     if _port_in_use():
         _kill_port()
     _refresh(icon)
@@ -105,17 +103,11 @@ def _stop(icon, item=None):
 
 def _kill_port():
     try:
-        r = subprocess.run(
-            ["netstat", "-ano"],
-            capture_output=True, text=True
-        )
+        r = subprocess.run(["netstat", "-ano"], capture_output=True, text=True)
         for line in r.stdout.splitlines():
             if f":{PORT}" in line and "LISTENING" in line:
                 pid = line.strip().split()[-1]
-                subprocess.run(
-                    ["taskkill", "/F", "/PID", pid],
-                    capture_output=True
-                )
+                subprocess.run(["taskkill", "/F", "/PID", pid], capture_output=True)
     except Exception:
         pass
 
@@ -123,8 +115,13 @@ def _kill_port():
 def _refresh(icon):
     running = _is_running()
     icon.icon  = _make_icon(running)
-    status     = f"● Running on :{PORT}" if running else "○ Stopped"
-    icon.title = f"myStreamDeck  {status}"
+    status     = f"Running on :{PORT}" if running else "Stopped"
+    rec        = f"  |  Recording btn {_recording_button}" if _recording_button is not None else ""
+    icon.title = f"myStreamDeck  {status}{rec}"
+    try:
+        icon.update_menu()
+    except Exception:
+        pass
 
 
 def _toggle(icon, item):
@@ -139,16 +136,33 @@ def _exit(icon, item):
     icon.stop()
 
 
-# ── Setup & run ─────────────────────────────────────────────────────────────
+def _is_recording():
+    return _recording_button is not None
+
+
+# ── Setup & run ──────────────────────────────────────────────────────────────
 
 def _setup(icon):
     icon.visible = True
-    _start(icon)                          # auto-start server on launch
+    _start(icon)
 
-    def _watch():                         # refresh icon if server dies
+    def _watch():
+        global _recording_button
         while icon.visible:
             time.sleep(3)
             _refresh(icon)
+            # Sync recording state driven by the phone
+            try:
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{PORT}/record/status", timeout=1
+                ) as r:
+                    data = json.loads(r.read())
+                    server_rec = data.get("buttonId") if data.get("recording") else None
+                    if server_rec != _recording_button:
+                        _recording_button = server_rec
+                        _refresh(icon)
+            except Exception:
+                pass
 
     threading.Thread(target=_watch, daemon=True).start()
 
@@ -160,13 +174,19 @@ menu = pystray.Menu(
         default=True,
     ),
     pystray.Menu.SEPARATOR,
+    pystray.MenuItem(
+        lambda item: f"Recording  Button {_recording_button}" if _recording_button is not None else "Record",
+        lambda icon, item: None,   # phone controls recording; this is a status display only
+        enabled=lambda item: _is_recording(),
+    ),
+    pystray.Menu.SEPARATOR,
     pystray.MenuItem("Exit", _exit),
 )
 
 tray = pystray.Icon(
     "myStreamDeck",
     _make_icon(False),
-    "myStreamDeck  ○ Stopped",
+    "myStreamDeck  Stopped",
     menu,
 )
 tray.run(_setup)

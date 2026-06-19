@@ -33,7 +33,7 @@ The tray app (`server/tray.pyw`) runs this automatically on every server start.
 |------|---------|
 | `app/src/main/java/.../MainActivity.kt` | Navigation state (Deck ↔ Config), shared button list + activeIds |
 | `app/src/main/java/.../ui/MainScreen.kt` | 3×5 grid (nested Row/Column weight-based, not LazyGrid), red/green borders |
-| `app/src/main/java/.../ui/MacroConfigScreen.kt` | Settings: edit label/URL, macro recorder UI |
+| `app/src/main/java/.../ui/MacroConfigScreen.kt` | Settings dialog with Cancel/Reset/Record/Save buttons; recording mode shows blinking indicator + Done |
 | `app/src/main/java/.../model/MacroButton.kt` | Data model + defaultButtons (button 1 pre-wired) |
 | `app/src/main/java/.../ui/theme/Theme.kt` | Dark Material3 theme |
 
@@ -41,11 +41,11 @@ The tray app (`server/tray.pyw`) runs this automatically on every server start.
 | File | Purpose |
 |------|---------|
 | `server/server.js` | Node.js HTTP server, dynamic routing for all 15 buttons — spawns `pwsh` (PS7) for PS1 scripts |
-| `server/tray.pyw` | Python system tray app (green/red dot), auto-starts server + ADB reverse |
+| `server/tray.pyw` | Python system tray app (green/red dot), auto-starts server + ADB reverse; must have `# -*- coding: utf-8 -*-` header |
 | `server/recorder.py` | pynput listener — records mouse clicks + keystrokes to JSON |
 | `server/player.py` | pyautogui — replays a recorded macro JSON |
-| `server/switch_desktop.py` | pyautogui helper — switches virtual desktop by exact delta (right/left N presses) |
-| `server/actions/button1.ps1` | Switches to "YouTube" virtual desktop by name, then opens YouTube_Reference_Tool + YouTube Transcripts side-by-side on 4K display |
+| `server/switch_desktop.py` | pyautogui helper — switches virtual desktop by exact delta (right/left N presses as chord) |
+| `server/actions/button1.ps1` | Switches to "YouTube" virtual desktop by name, opens YouTube_Reference_Tool + YouTube Transcripts side-by-side on 4K display |
 | `server/macros/button<id>.json` | Saved recorded macros (created at runtime) |
 | `server/Start Tray.bat` | Double-click launcher (uses %LOCALAPPDATA%\Microsoft\WindowsApps\pythonw.exe) |
 | `server/Start Tray.vbs` | Silent VBScript launcher alternative |
@@ -64,6 +64,10 @@ adb shell am start -n "com.diatoms.mystreamdeck/.MainActivity"
 # Re-establish USB tunnel after phone reconnect
 adb reverse tcp:8765 tcp:8765
 ```
+Requires `local.properties` in project root:
+```
+sdk.dir=C:\\Users\\Diatom\\AppData\\Local\\Android\\Sdk
+```
 
 ### Windows Server
 ```
@@ -71,7 +75,36 @@ Double-click: server\Start Tray.bat
 ```
 - Tray icon appears in system tray (may need to enable in Taskbar Settings → Other system tray icons)
 - Green dot = server running, Red dot = stopped
-- Right-click: Start/Stop Server | Exit
+- Right-click menu: **Start/Stop Server** | **Record** (status only) | **Exit**
+
+## Settings Dialog (MacroConfigScreen)
+Four buttons at the bottom of every button's edit dialog:
+- **Cancel** — discard changes and close
+- **Reset** — clear label to `#N`, clear sub-label and API URL
+- **Record** — start recording on PC; dialog switches to blinking indicator + **Done** button
+- **Save** — save label/sub-label/URL changes
+
+When **Done** is tapped after recording: recording stops, button URL is auto-set to
+`http://localhost:8765/button/<id>`, button is saved, dialog closes. No separate Save needed.
+
+## Macro Recorder Flow
+1. Android: Settings gear → tap a button → tap **Record**
+2. PC: recorder.py starts capturing all mouse clicks + keystrokes
+3. Android: Live blinking indicator + event count (polls /record/status every 1s)
+4. Android: tap **Done** → stops recorder, auto-saves button with URL set to server endpoint
+5. Next tap replays via player.py with exact timing (delays capped at 3s)
+
+**Important:** Recorded macros CANNOT reliably switch virtual desktops. pynput captures
+Win/Ctrl/← as individual key presses; pyautogui replays them individually — the chord never fires.
+Any button that switches virtual desktops must be a PS1 script, not a recorded macro.
+
+## System Tray — Record Status
+The tray's **Record** menu item is a status indicator only — the phone controls recording:
+- **Greyed out** = not recording
+- **Active "Recording  Button N"** = phone is in record mode for button N
+
+Tray polls `/record/status` every 3 seconds and calls `icon.update_menu()` to rebuild the
+native Win32 menu. Without `update_menu()` the menu stays frozen regardless of state changes.
 
 ## Button Border Logic
 - **Red border** = button has never had a successful HTTP response this session
@@ -87,13 +120,28 @@ Button 1 opens VS Code side-by-side on the 4K display:
 - Left half:  YouTube_Reference_Tool  → X=1920, Y=0, W=1920, H=2160
 - Right half: YouTube Transcripts      → X=3840, Y=0, W=1920, H=2160
 
-## Macro Recorder Flow
-1. Android: Settings gear → tap a button → "Record Macro"
-2. PC: recorder.py starts capturing all mouse clicks + keystrokes
-3. Android: Live event counter shown (polls /record/status every 1s)
-4. Android: "Stop & Save" → stops recorder, saves to server/macros/button<id>.json
-5. Button's apiUrl is auto-set to http://localhost:8765/button/<id>
-6. Next tap replays via player.py with exact timing (delays capped at 3s)
+## Virtual Desktop Switching Pattern (PS1 scripts)
+All buttons that switch desktops must use this pattern (see button1.ps1):
+```powershell
+Import-Module VirtualDesktop -WarningAction SilentlyContinue
+$targetIndex = -1
+$count = Get-DesktopCount
+for ($i = 0; $i -lt $count; $i++) {
+    if ((Get-DesktopName (Get-Desktop $i)) -eq "DesktopLabel") { $targetIndex = $i; break }
+}
+if ($targetIndex -lt 0) { exit 1 }
+$delta = $targetIndex - (Get-DesktopIndex (Get-CurrentDesktop))
+$python = "$env:LOCALAPPDATA\Microsoft\WindowsApps\python.exe"
+& $python "$PSScriptRoot\..\switch_desktop.py" $delta
+Start-Sleep -Milliseconds 800
+```
+**Find by label, not index.** Index changes when desktops are reordered.
+
+## Known Virtual Desktops
+| Desktop Label | Button | Status |
+|---------------|--------|--------|
+| YouTube | 1 | Fully implemented (button1.ps1) |
+| Kuzweil | 15 | Label confirmed; button15.ps1 not yet written — need to know what apps to open |
 
 ## Tech Stack
 | Layer | Choice |
@@ -115,18 +163,12 @@ Microsoft Store Python — `pythonw.exe` is at:
 
 Installed packages: `pystray`, `Pillow`, `pynput`, `pyautogui`
 
-## Virtual Desktop Switching (button1.ps1)
-button1.ps1 uses the `VirtualDesktop` PS7 module to find the "YouTube" desktop by label, computes
-the exact delta from the current desktop, then calls `switch_desktop.py` which sends `Win+Ctrl+Right/Left`
-N times via pyautogui. VS Code opens after the switch so windows land on the correct desktop.
-
-**Dependency:** `Install-Module VirtualDesktop -Scope CurrentUser` (already installed, PS7 only)
-
-**Note:** server.js must use `pwsh` (not `powershell`) so PS7 modules are available.
-
 ## Known Issues / Next Steps
+- [ ] Button 15: write button15.ps1 — switch to "Kuzweil" desktop; confirm apps to open
+- [ ] Buttons 2–14: need actions (recorded macros or PS1 scripts)
 - [ ] Button state (red/green) resets on every app launch — no persistence yet
 - [ ] No Windows startup shortcut created yet (copy Start Tray.bat to shell:startup)
-- [x] YouTube Virtual Desktop auto-switching — resolves "YouTube" desktop by label, survives reorder
-- [ ] Only button 1 has a configured action (PS1 script) — buttons 2–15 need macros recorded
 - [ ] Macro recorder captures ALL PC input including unintended keystrokes during recording pauses
+- [x] YouTube Virtual Desktop auto-switching — resolves "YouTube" desktop by label, survives reorder
+- [x] System tray Record status item syncs with phone recording state
+- [x] Settings dialog: Cancel / Reset / Record / Done (auto-save) / Save buttons

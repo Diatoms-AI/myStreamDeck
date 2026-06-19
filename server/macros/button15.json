@@ -1,0 +1,139 @@
+[
+  {
+    "type": "click",
+    "x": 1662,
+    "y": 1048,
+    "button": "left",
+    "delay_ms": 2773
+  },
+  {
+    "type": "click",
+    "x": 1573,
+    "y": 960,
+    "button": "right",
+    "delay_ms": 2738
+  },
+  {
+    "type": "click",
+    "x": 1494,
+    "y": 911,
+    "button": "left",
+    "delay_ms": 1540
+  },
+  {
+    "type": "click",
+    "x": 1806,
+    "y": 17,
+    "button": "left",
+    "delay_ms": 2581
+  },
+  {
+    "type": "key",
+    "key": "ctrl_l",
+    "delay_ms": 2197
+  },
+  {
+    "type": "key",
+    "key": "cmd",
+    "delay_ms": 22
+  },
+  {
+    "type": "key",
+    "key": "left",
+    "delay_ms": 104
+  },
+  {
+    "type": "key",
+    "key": "left",
+    "delay_ms": 1057
+  },
+  {
+    "type": "key",
+    "key": "left",
+    "delay_ms": 1064
+  },
+  {
+    "type": "click",
+    "x": 1594,
+    "y": 271,
+    "button": "left",
+    "delay_ms": 3085
+  },
+  {
+    "type": "click",
+    "x": 1087,
+    "y": 35,
+    "button": "left",
+    "delay_ms": 1067
+  },
+  {
+    "type": "click",
+    "x": 1088,
+    "y": 32,
+    "button": "left",
+    "delay_ms": 184
+  },
+  {
+    "type": "click",
+    "x": 1104,
+    "y": 47,
+    "button": "left",
+    "delay_ms": 6107
+  },
+  {
+    "type": "click",
+    "x": 1104,
+    "y": 47,
+    "button": "left",
+    "delay_ms": 183
+  },
+  {
+    "type": "click",
+    "x": 207,
+    "y": 195,
+    "button": "left",
+    "delay_ms": 4505
+  },
+  {
+    "type": "click",
+    "x": 244,
+    "y": 210,
+    "button": "left",
+    "delay_ms": 866
+  },
+  {
+    "type": "click",
+    "x": 76,
+    "y": 293,
+    "button": "left",
+    "delay_ms": 6588
+  },
+  {
+    "type": "click",
+    "x": 247,
+    "y": 627,
+    "button": "left",
+    "delay_ms": 4891
+  },
+  {
+    "type": "click",
+    "x": 247,
+    "y": 627,
+    "button": "left",
+    "delay_ms": 218
+  },
+  {
+    "type": "click",
+    "x": 234,
+    "y": 246,
+    "button": "left",
+    "delay_ms": 1697
+  },
+  {
+    "type": "click",
+    "x": 234,
+    "y": 246,
+    "button": "left",
+    "delay_ms": 209
+  }
+]

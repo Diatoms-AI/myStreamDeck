@@ -20,9 +20,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import com.diatoms.mystreamdeck.model.MacroButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -33,7 +32,7 @@ import java.net.URL
 
 private const val SERVER = "http://localhost:8765"
 
-private enum class RecordState { IDLE, RECORDING, DONE }
+private enum class RecordState { IDLE, RECORDING }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,13 +90,12 @@ private fun EditMacroDialog(
     onSave: (MacroButton) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var label    by remember { mutableStateOf(button.label) }
-    var subLabel by remember { mutableStateOf(button.subLabel ?: "") }
-    var apiUrl   by remember { mutableStateOf(button.apiUrl) }
-
-    var recordState  by remember { mutableStateOf(RecordState.IDLE) }
-    var eventCount   by remember { mutableStateOf(0) }
-    var statusMsg    by remember { mutableStateOf("") }
+    var label       by remember { mutableStateOf(button.label) }
+    var subLabel    by remember { mutableStateOf(button.subLabel ?: "") }
+    var apiUrl      by remember { mutableStateOf(button.apiUrl) }
+    var recordState by remember { mutableStateOf(RecordState.IDLE) }
+    var eventCount  by remember { mutableStateOf(0) }
+    var statusMsg   by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
     // Poll /record/status every second while recording
@@ -143,15 +141,14 @@ private fun EditMacroDialog(
                 val conn = URL("$SERVER/record/stop").openConnection() as HttpURLConnection
                 conn.requestMethod = "POST"
                 conn.connectTimeout = 3000; conn.readTimeout = 3000
-                val body = conn.inputStream.bufferedReader().readText()
-                val count = Regex(""""eventCount"\s*:\s*(\d+)""")
-                    .find(body)?.groupValues?.get(1)?.toIntOrNull() ?: 0
+                conn.responseCode
                 withContext(Dispatchers.Main) {
-                    eventCount = count
-                    recordState = RecordState.DONE
-                    // Auto-set URL so button press triggers playback
-                    apiUrl = "$SERVER/button/${button.id}"
-                    statusMsg = "$count events recorded"
+                    // Auto-save: update the button's URL and close the dialog
+                    onSave(button.copy(
+                        label    = label.ifBlank { button.label },
+                        subLabel = subLabel.ifBlank { null },
+                        apiUrl   = "$SERVER/button/${button.id}"
+                    ))
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -162,98 +159,113 @@ private fun EditMacroDialog(
         }
     }
 
-    AlertDialog(
-        onDismissRequest = {
-            if (recordState == RecordState.RECORDING) stopRecording()
-            onDismiss()
-        },
-        title = { Text("Button ${button.id}") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    fun resetFields() {
+        label       = "#${button.id}"
+        subLabel    = ""
+        apiUrl      = ""
+        recordState = RecordState.IDLE
+        statusMsg   = ""
+        eventCount  = 0
+    }
 
-                // ── Label fields ──────────────────────────────────────
-                OutlinedTextField(
-                    value = label, onValueChange = { label = it },
-                    label = { Text("Label") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = subLabel, onValueChange = { subLabel = it },
-                    label = { Text("Sub-label (optional)") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = apiUrl, onValueChange = { apiUrl = it },
-                    label = { Text("API URL") }, singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+    Dialog(onDismissRequest = {
+        if (recordState == RecordState.RECORDING) stopRecording()
+        else onDismiss()
+    }) {
+        Surface(
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 6.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text("Button ${button.id}", style = MaterialTheme.typography.headlineSmall)
 
-                HorizontalDivider()
+                if (recordState == RecordState.RECORDING) {
+                    // ── Recording mode ────────────────────────────────
+                    RecordingIndicator(eventCount = eventCount)
 
-                // ── Macro recorder ────────────────────────────────────
-                Text("Screen Macro Recorder", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                    Text(
+                        "Perform your actions on the PC.\nThis screen is not recorded.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
 
-                when (recordState) {
-                    RecordState.IDLE -> {
-                        Button(
-                            onClick = ::startRecording,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE74C3C)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.FiberManualRecord, null,
-                                modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Record Macro")
-                        }
-                        if (statusMsg.isNotBlank())
-                            Text(statusMsg, style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Button(
+                        onClick = ::stopRecording,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Stop, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Done")
                     }
 
-                    RecordState.RECORDING -> {
-                        RecordingIndicator(eventCount = eventCount)
-                        Spacer(Modifier.height(4.dp))
-                        Button(
-                            onClick = ::stopRecording,
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF555555)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Default.Stop, null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Stop & Save")
-                        }
-                    }
+                } else {
+                    // ── Edit mode ─────────────────────────────────────
+                    OutlinedTextField(
+                        value = label, onValueChange = { label = it },
+                        label = { Text("Label") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = subLabel, onValueChange = { subLabel = it },
+                        label = { Text("Sub-label (optional)") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = apiUrl, onValueChange = { apiUrl = it },
+                        label = { Text("API URL") }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-                    RecordState.DONE -> {
+                    if (statusMsg.isNotBlank()) {
                         Text(
-                            "✓ $statusMsg — URL set to server",
-                            color = Color(0xFF2ECC71),
-                            style = MaterialTheme.typography.bodySmall
+                            statusMsg,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
                         )
-                        TextButton(
-                            onClick = { recordState = RecordState.IDLE; statusMsg = "" },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Record Again") }
+                    }
+
+                    // Cancel · Reset · ——— · Record · Save
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        TextButton(onClick = onDismiss) { Text("Cancel") }
+
+                        TextButton(onClick = ::resetFields) { Text("Reset") }
+
+                        Spacer(Modifier.weight(1f))
+
+                        OutlinedButton(
+                            onClick = ::startRecording,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.FiberManualRecord, null,
+                                modifier = Modifier.size(14.dp),
+                                tint = Color(0xFFE74C3C)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text("Record")
+                        }
+
+                        Spacer(Modifier.width(8.dp))
+
+                        Button(onClick = {
+                            onSave(button.copy(
+                                label    = label.ifBlank { button.label },
+                                subLabel = subLabel.ifBlank { null },
+                                apiUrl   = apiUrl.trim()
+                            ))
+                        }) { Text("Save") }
                     }
                 }
             }
-        },
-        confirmButton = {
-            Button(onClick = {
-                onSave(button.copy(
-                    label    = label.ifBlank { button.label },
-                    subLabel = subLabel.ifBlank { null },
-                    apiUrl   = apiUrl.trim()
-                ))
-            }) { Text("Save") }
-        },
-        dismissButton = {
-            TextButton(onClick = {
-                if (recordState == RecordState.RECORDING) stopRecording()
-                onDismiss()
-            }) { Text("Cancel") }
         }
-    )
+    }
 }
 
 @Composable
